@@ -1,0 +1,47 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum Status {
+  ACTIVE
+  LOCKED
+}
+
+model User {
+  id       String  @id @default(uuid())
+  email    String  @unique
+  name     String
+  password String
+  role     Role    @default(USER)
+  status   Status  @default(ACTIVE)
+  plan     String  @default("Basic")
+  balance  Decimal @default(50.00)
+
+  transactions Transaction[] // ✅ ADD THIS  
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Transaction {
+  id        String   @id @default(uuid())
+  userId    String
+  type      String   // DEPOSIT | WITHDRAW | ADMIN_ADJUST
+  amount    Float
+  status    String   @default("APPROVED") // PENDING | APPROVED | REJECTED
+  note      String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+}
+
