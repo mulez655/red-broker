@@ -51,31 +51,48 @@ router.patch("/plan", requireAuth, async (req, res) => {
 });
 
 // ✅ Deposit simulation AFTER choosing plan
-router.post("/deposit", requireAuth, async (req, res) => {
-  const schema = z.object({
-    amount: z.number().positive().max(1000000)
-  });
+router.post("/deposit-request", requireAuth, async (req, res) => {
+  try {
+    const amount = Number(req.body.amount);
+    const asset = String(req.body.asset || "btc").toLowerCase();
+    const network = req.body.network ? String(req.body.network).toLowerCase() : null;
 
-  const parsed = schema.safeParse(req.body);
-  if (!parsed.success) {
-    return res.status(400).json({ error: "Invalid deposit amount" });
-  }
+    const allowedAssets = ["btc", "eth", "usdt"];
+    const allowedUsdtNetworks = ["trc20", "erc20"];
 
-  const amount = parsed.data.amount;
-
-  const user = await prisma.user.update({
-    where: { id: req.user.sub },
-    data: { balance: { increment: amount } },
-    select: {
-      id: true,
-      name: true,
-      email: true,
-      plan: true,
-      balance: true
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return res.status(400).json({ error: "Invalid amount" });
     }
-  });
 
-  res.json({ user });
+    if (!allowedAssets.includes(asset)) {
+      return res.status(400).json({ error: "Invalid asset" });
+    }
+
+    if (asset === "usdt" && network && !allowedUsdtNetworks.includes(network)) {
+      return res.status(400).json({ error: "Invalid USDT network" });
+    }
+
+    const noteParts = [
+      "User submitted deposit request",
+      `asset=${asset}`,
+      asset === "usdt" ? `network=${network || "trc20"}` : null
+    ].filter(Boolean);
+
+    const tx = await prisma.transaction.create({
+      data: {
+        userId: req.user.sub,
+        type: "DEPOSIT",
+        amount,
+        status: "PENDING",
+        note: noteParts.join(" | ")
+      }
+    });
+
+    res.json({ transaction: tx });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: "Failed to create deposit request" });
+  }
 });
 
 
@@ -121,3 +138,4 @@ router.post("/deposit-request", requireAuth, async (req, res) => {
 
 
 export default router;
+
